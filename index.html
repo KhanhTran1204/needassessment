@@ -143,7 +143,8 @@
             leads: JSON.parse(localStorage.getItem('smartlog_leads') || '[]'),
             webhookUrl: localStorage.getItem('smartlog_webhook') || '',
             dashboardTab: 'overview',
-            loginError: false
+            loginError: false,
+            sidebarOpen: true
         };
 
         // --- CORE FUNCTIONS ---
@@ -265,17 +266,24 @@
                 state.leads.unshift(result);
                 localStorage.setItem('smartlog_leads', JSON.stringify(state.leads));
 
-                // Send Webhook (Fix CORS issue with Google Apps Script)
+                // Send Webhook (Fix Apps Script Payload Issue)
                 if (state.webhookUrl) {
+                    const payload = encodeURIComponent(JSON.stringify(result));
                     fetch(state.webhookUrl, {
                         method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(result)
-                    }).catch(err => console.error("Webhook error:", err));
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'data=' + payload
+                    }).then(() => console.log('Webhook sent'))
+                      .catch(err => console.error("Webhook error:", err));
                 }
 
                 state.surveyStep = QUESTIONS.length + 1;
+                this.render();
+            },
+
+            // Dashboard View Toggles
+            toggleSidebar() {
+                state.sidebarOpen = !state.sidebarOpen;
                 this.render();
             },
 
@@ -604,22 +612,30 @@
                     const appsScriptCode = `function doPost(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
+    
+    // Xử lý dữ liệu từ x-www-form-urlencoded
+    var rawData = e.parameter.data || (e.postData ? e.postData.contents : "{}");
+    var data = JSON.parse(rawData);
+    
     var row = [
-      data.date,
-      data.customer.name,
-      data.customer.company,
-      data.customer.phone,
-      data.customer.email,
-      data.customer.jobTitle,
-      data.scores.total,
-      data.tier,
-      data.tags.join(', ')
+      data.date || new Date(),
+      data.customer ? data.customer.name : "",
+      data.customer ? data.customer.company : "",
+      data.customer ? data.customer.phone : "",
+      data.customer ? data.customer.email : "",
+      data.customer ? data.customer.jobTitle : "",
+      data.scores ? data.scores.total : 0,
+      data.tier || "",
+      data.tags ? data.tags.join(', ') : ""
     ];
+    
     sheet.appendRow(row);
-    return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+    
+    return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
+      .setMimeType(ContentService.MimeType.JSON);
   } catch(error) {
-    return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": error.toString()})).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }`;
                     content = `
@@ -642,7 +658,7 @@
                                 <pre id="apps_script_code" class="p-4 text-sm text-green-400 overflow-x-auto font-mono whitespace-pre">${appsScriptCode}</pre>
                             </div>
                             <div class="mt-4 p-4 bg-yellow-50 text-yellow-800 rounded-lg text-sm border border-yellow-200">
-                                <strong>Hướng dẫn:</strong> Mở Google Sheet mới > Extensions > Apps Script > Dán code trên vào > Nhấn Deploy > New Deployment > Chọn Web app > Execute as: Me, Who has access: Anyone > Copy Web app URL dán vào ô bên trên.
+                                <strong>LƯU Ý QUAN TRỌNG:</strong> Sau khi copy code mới vào Apps Script, bạn <strong>BẮT BUỘC</strong> phải ấn nút xanh <b>Deploy > New Deployment</b> (Tuyệt đối không dùng Manage Deployments). Chọn Web app > Execute as: Me > Who has access: Anyone. Copy URL mới dán vào ô bên trên.
                             </div>
                         </div>
                     </div>`;
@@ -650,12 +666,16 @@
 
                 return `
                 <div class="flex-grow flex bg-gray-50 h-full overflow-hidden absolute inset-0">
-                    <div class="w-64 bg-white border-r shadow-sm flex flex-col z-10 shrink-0">
-                        <div class="p-6">
-                            <h2 class="font-bold text-gray-800 text-lg">Sales Dashboard</h2>
-                            <p class="text-xs text-gray-500">Khảo sát tiềm năng KH</p>
+                    ${!state.sidebarOpen ? `<button onclick="app.toggleSidebar()" class="absolute top-4 left-4 z-20 p-2 bg-white shadow-sm border border-gray-200 rounded-lg text-gray-600 hover:text-primary transition"><i data-lucide="menu" class="w-5 h-5"></i></button>` : ''}
+                    <div class="${state.sidebarOpen ? 'w-64' : 'w-0'} bg-white border-r shadow-sm flex flex-col z-10 shrink-0 transition-all duration-300 overflow-hidden relative">
+                        <div class="p-6 flex justify-between items-center min-w-[256px]">
+                            <div>
+                                <h2 class="font-bold text-gray-800 text-lg">Sales Dashboard</h2>
+                                <p class="text-xs text-gray-500">Khảo sát tiềm năng KH</p>
+                            </div>
+                            <button onclick="app.toggleSidebar()" class="p-1 hover:bg-gray-100 rounded text-gray-500 transition"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
                         </div>
-                        <nav class="flex-grow flex flex-col gap-2 px-4">
+                        <nav class="flex-grow flex flex-col gap-2 px-4 min-w-[256px]">
                             <button onclick="app.setTab('overview')" class="flex items-center gap-3 p-3 rounded-xl font-medium transition ${state.dashboardTab === 'overview' ? 'bg-bg-box text-primary' : 'text-gray-600 hover:bg-gray-100'}">
                                 <i data-lucide="trending-up" class="w-5 h-5"></i> Báo cáo & Leads
                             </button>
@@ -664,7 +684,7 @@
                             </button>
                         </nav>
                     </div>
-                    <div class="flex-grow overflow-auto p-8 relative">
+                    <div class="flex-grow overflow-auto p-8 relative transition-all duration-300 ${!state.sidebarOpen ? 'pl-16' : ''}">
                         ${content}
                     </div>
                 </div>`;
