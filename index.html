@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đánh giá tiềm năng triển khai - Smartlog</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2933D9',
+                        highlight: '#F97707',
+                        'primary-hover': '#3543F6',
+                        text: '#40444C',
+                        'bg-box': '#ECF3FF'
+                    },
+                    fontFamily: {
+                        sans: ['"Be Vietnam Pro"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Custom CSS -->
+    <style>
+        body { color: #40444C; background-color: #FFFFFF; }
+        .btn-primary { background-color: #2933D9; color: white; transition: all 0.3s; }
+        .btn-primary:hover { background-color: #3543F6; }
+        .text-primary { color: #2933D9; }
+        .text-highlight { color: #F97707; }
+        
+        /* Hide scrollbar for clean dashboard */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm px-6 py-4 flex justify-between items-center z-10 relative">
+        <div class="flex items-center gap-2 cursor-pointer" onclick="app.changeView('survey')">
+            <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-bold text-xl">S</div>
+            <span class="font-bold text-2xl text-primary tracking-tight">Smartlog</span>
+        </div>
+        <div id="header-actions">
+            <!-- Dynamically injected -->
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex flex-col relative overflow-hidden" id="app-container">
+        <!-- Rendered Content will go here -->
+    </main>
+
+    <!-- Modal Container -->
+    <div id="modal-container" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 backdrop-blur-sm">
+        <!-- Modal content will go here -->
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- DATA & CONFIGURATION ---
+        const JOB_TITLES = [
+            "Chủ doanh nghiệp / Giám đốc (CEO/Director)",
+            "Giám đốc Chuỗi cung ứng (Supply Chain Director)",
+            "Trưởng phòng Logistics / Vận hành",
+            "Trưởng phòng Kho / Vận tải",
+            "Trưởng phòng IT / Chuyển đổi số",
+            "Chuyên viên Logistics / Vận hành",
+            "Khác"
+        ];
+
+        const QUESTIONS = [
+            {
+                id: 1, group: 'A', text: "Số lượng đơn hàng trung bình mỗi tháng của doanh nghiệp bạn là bao nhiêu?", type: 'single',
+                options: [ { text: "Dưới 500 đơn/tháng", score: 2 }, { text: "500 – 2.000 đơn/tháng", score: 5 }, { text: "2.000 – 10.000 đơn/tháng", score: 8 }, { text: "Trên 10.000 đơn/tháng", score: 10 } ]
+            },
+            {
+                id: 2, group: 'A', text: "Doanh nghiệp bạn hiện đang vận hành bao nhiêu kho/chi nhánh?", type: 'single',
+                options: [ { text: "1 kho/địa điểm", score: 2 }, { text: "2 – 3 kho/địa điểm", score: 5 }, { text: "4 – 10 kho/địa điểm", score: 8 }, { text: "Trên 10 kho/địa điểm", score: 10 } ]
+            },
+            {
+                id: 3, group: 'A', text: "Số lượng nhân sự đang tham gia vận hành logistics tại doanh nghiệp bạn?", type: 'single',
+                options: [ { text: "Dưới 10 người", score: 1 }, { text: "10 – 50 người", score: 4 }, { text: "50 – 200 người", score: 6 }, { text: "Trên 200 người", score: 8 } ]
+            },
+            {
+                id: 4, group: 'A', text: "Doanh nghiệp bạn hiện đang sử dụng hệ thống/công cụ nào để quản lý vận hành?", type: 'single',
+                options: [ { text: "Excel hoặc quản lý thủ công hoàn toàn", score: 2 }, { text: "Phần mềm nội bộ tự phát triển", score: 4 }, { text: "Phần mềm của một đơn vị khác (không phải Smartlog)", score: 6 }, { text: "Đang sử dụng một phần giải pháp của Smartlog và muốn mở rộng thêm", score: 7 } ]
+            },
+            {
+                id: 5, group: 'B', text: "Mức độ cấp bách của doanh nghiệp bạn trong việc triển khai hệ thống mới là như thế nào?", type: 'single',
+                options: [ { text: "Hiện tại chỉ đang tìm hiểu, chưa có kế hoạch cụ thể", score: 2, tag: "NURTURE" }, { text: "Đang lên ngân sách/kế hoạch cho năm tới", score: 6, tag: "EDUCATE" }, { text: "Dự kiến triển khai trong thời gian tới", score: 11, tag: "SCHEDULE" }, { text: "Cần triển khai ngay trong quý này", score: 15, tag: "URGENT_CALL" } ]
+            },
+            {
+                id: 6, group: 'B', text: "Ngân sách cho việc triển khai hệ thống của doanh nghiệp bạn đang ở giai đoạn nào?", type: 'single',
+                options: [ { text: "Chưa có ngân sách, chưa đề xuất", score: 2, tag: "BUILD_CASE" }, { text: "Đang trong quá trình đề xuất/xét duyệt nội bộ", score: 7, tag: "SUPPORT_PROPOSAL" }, { text: "Đã có ngân sách dự kiến, chưa được phê duyệt chính thức", score: 11, tag: "FAST_TRACK_DEMO" }, { text: "Ngân sách đã được phê duyệt", score: 15, tag: "DIRECT_PROPOSAL" } ]
+            },
+            {
+                id: 7, group: 'B', text: "Vai trò của bạn trong việc ra quyết định triển khai hệ thống là gì?", type: 'single',
+                options: [ { text: "Tôi chỉ là người tìm hiểu, chưa rõ ai sẽ quyết định", score: 1 }, { text: "Tôi là người đề xuất, ban lãnh đạo sẽ là người quyết định", score: 4 }, { text: "Tôi là trưởng bộ phận và có ảnh hưởng đến quyết định", score: 6 }, { text: "Tôi là người ra quyết định trực tiếp", score: 8 } ]
+            },
+            {
+                id: 9, group: 'B', text: "Doanh nghiệp bạn đã từng triển khai phần mềm quản lý vận hành trước đây chưa?", type: 'single',
+                options: [ { text: "Chưa bao giờ triển khai", score: 1 }, { text: "Đã từng thử nhưng thất bại hoặc bỏ ngang", score: 4 }, { text: "Đang sử dụng nhưng không đáp ứng đủ nhu cầu hiện tại", score: 6 }, { text: "Đã triển khai thành công và đang muốn nâng cấp", score: 7 } ]
+            },
+            {
+                id: 8, group: 'C', text: "Bài toán nào doanh nghiệp bạn đang mong muốn giải quyết? (Có thể chọn nhiều đáp án)", type: 'multiple',
+                options: [ { text: "Tối ưu chi phí và quản lý vận chuyển", score: 3, tag: "TMS" }, { text: "Quản lý kho và hàng tồn kho", score: 3, tag: "WMS" }, { text: "Quản lý đơn hàng đa kênh", score: 3, tag: "OMS" }, { text: "Quản lý đơn hàng quốc tế", score: 3, tag: "SGTM" }, { text: "Theo dõi dữ liệu vận hành thời gian thực, dashboard điều hành", score: 3, tag: "SCT" }, { text: "Lập kế hoạch và dự báo chuỗi cung ứng", score: 3, tag: "SSCP" }, { text: "Chưa xác định rõ, cần được tư vấn thêm", score: 1, tag: "UNCLEAR", exclusive: true } ]
+            },
+            {
+                id: 10, group: 'C', text: "Điều gì là quan trọng nhất với bạn khi lựa chọn một đối tác công nghệ logistics?", type: 'single',
+                options: [ { text: "Giá cả và chi phí đầu tư", score: 5, tag: "PRICE_SENSITIVE" }, { text: "Tốc độ triển khai nhanh", score: 6, tag: "SPEED_DRIVEN" }, { text: "Khả năng tích hợp với hệ thống hiện có", score: 7, tag: "INTEGRATION_FOCUSED" }, { text: "Năng lực hỗ trợ và dịch vụ sau triển khai", score: 7, tag: "SERVICE_FOCUSED" }, { text: "Khả năng mở rộng theo sự tăng trưởng của doanh nghiệp", score: 8, tag: "SCALE_FOCUSED" } ]
+            }
+        ];
+
+        const TIERS = [
+            { name: "Unqualified", min: 0, max: 19, color: "bg-gray-400", type: "⚪" },
+            { name: "Cold Lead", min: 20, max: 39, color: "bg-blue-500", type: "🔵" },
+            { name: "Potential Lead", min: 40, max: 59, color: "bg-yellow-500", type: "🟡" },
+            { name: "Warm Lead", min: 60, max: 79, color: "bg-orange-500", type: "🟠" },
+            { name: "Hot Lead", min: 80, max: 100, color: "bg-red-600", type: "🔴" }
+        ];
+
+        // --- GLOBAL STATE ---
+        const state = {
+            view: 'survey', // survey, login, dashboard
+            surveyStep: 0,
+            formData: { name: '', company: '', phone: '', email: '', jobTitle: '' },
+            answers: {},
+            leads: JSON.parse(localStorage.getItem('smartlog_leads') || '[]'),
+            webhookUrl: localStorage.getItem('smartlog_webhook') || '',
+            dashboardTab: 'overview',
+            loginError: false
+        };
+
+        // --- CORE FUNCTIONS ---
+        const app = {
+            init() {
+                this.render();
+            },
+            
+            changeView(view) {
+                state.view = view;
+                this.render();
+            },
+
+            // Form Handlers
+            handleInfoSubmit(e) {
+                e.preventDefault();
+                state.formData = {
+                    name: document.getElementById('f_name').value,
+                    company: document.getElementById('f_company').value,
+                    phone: document.getElementById('f_phone').value,
+                    email: document.getElementById('f_email').value,
+                    jobTitle: document.getElementById('f_job').value,
+                };
+                state.surveyStep = 1;
+                this.render();
+            },
+
+            handleAnswer(questionId, optionIndex, isMulti) {
+                if (isMulti) {
+                    let currentAnswers = state.answers[questionId] || [];
+                    const question = QUESTIONS.find(q => q.id === questionId);
+                    const selectedOption = question.options[optionIndex];
+                    
+                    if (selectedOption.exclusive) {
+                        currentAnswers = currentAnswers.includes(optionIndex) ? [] : [optionIndex];
+                    } else {
+                        const exclusiveIndex = question.options.findIndex(o => o.exclusive);
+                        currentAnswers = currentAnswers.filter(idx => idx !== exclusiveIndex);
+                        
+                        if (currentAnswers.includes(optionIndex)) {
+                            currentAnswers = currentAnswers.filter(idx => idx !== optionIndex);
+                        } else {
+                            currentAnswers.push(optionIndex);
+                        }
+                    }
+                    state.answers[questionId] = currentAnswers;
+                    this.render();
+                } else {
+                    state.answers[questionId] = optionIndex;
+                    this.render(); // Cập nhật UI ngay lập tức để hiện dấu tick
+                    // Auto advance
+                    setTimeout(() => {
+                        if (state.surveyStep === QUESTIONS.length) {
+                            app.submitSurvey(); // Gọi hàm lưu kết quả nếu đây là câu cuối
+                        } else {
+                            state.surveyStep++;
+                            this.render();
+                        }
+                    }, 300);
+                }
+            },
+
+            nextStep() { state.surveyStep++; this.render(); },
+            prevStep() { state.surveyStep--; this.render(); },
+
+            calculateResults() {
+                let scaleScore = 0, readinessScore = 0, intentScore = 0;
+                let tags = [], override = false, productTags = [];
+
+                QUESTIONS.forEach((q) => {
+                    const answer = state.answers[q.id];
+                    if (answer === undefined) return;
+
+                    if (q.type === 'single') {
+                        const opt = q.options[answer];
+                        if (q.group === 'A') scaleScore += opt.score;
+                        if (q.group === 'B') readinessScore += opt.score;
+                        if (q.group === 'C') intentScore += opt.score;
+                        if (opt.tag) {
+                            tags.push(opt.tag);
+                            if (opt.tag === 'URGENT_CALL' || opt.tag === 'DIRECT_PROPOSAL') override = true;
+                        }
+                    } else if (q.type === 'multiple') {
+                        let multiScore = 0;
+                        answer.forEach(optIdx => {
+                            const opt = q.options[optIdx];
+                            multiScore += opt.score;
+                            if (opt.tag) {
+                                tags.push(opt.tag);
+                                if (q.id === 8 && opt.tag !== 'UNCLEAR') productTags.push(opt.tag);
+                            }
+                        });
+                        intentScore += Math.min(multiScore, 12);
+                    }
+                });
+
+                if (productTags.length >= 3) tags.push("CROSS_SELL_OPPORTUNITY");
+
+                const totalScore = scaleScore + readinessScore + intentScore;
+                let tierIndex = TIERS.findIndex(t => totalScore >= t.min && totalScore <= t.max);
+                if (tierIndex === -1) tierIndex = 0;
+                if (override && tierIndex < TIERS.length - 1) tierIndex += 1;
+
+                return {
+                    date: new Date().toISOString(),
+                    customer: state.formData,
+                    rawAnswers: state.answers,
+                    scores: { scale: scaleScore, readiness: readinessScore, intent: intentScore, total: totalScore },
+                    tags: tags,
+                    tier: TIERS[tierIndex].name,
+                    overrideApplied: override
+                };
+            },
+
+            submitSurvey() {
+                const result = this.calculateResults();
+                
+                // Save Local
+                state.leads.unshift(result);
+                localStorage.setItem('smartlog_leads', JSON.stringify(state.leads));
+
+                // Send Webhook (Fix CORS issue with Google Apps Script)
+                if (state.webhookUrl) {
+                    fetch(state.webhookUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(result)
+                    }).catch(err => console.error("Webhook error:", err));
+                }
+
+                state.surveyStep = QUESTIONS.length + 1;
+                this.render();
+            },
+
+            // Admin Login
+            handleLogin(e) {
+                e.preventDefault();
+                const u = document.getElementById('l_user').value;
+                const p = document.getElementById('l_pass').value;
+                if (u === 'admin' && p === 'admin@123') {
+                    state.loginError = false;
+                    this.changeView('dashboard');
+                } else {
+                    state.loginError = true;
+                    this.render();
+                }
+            },
+
+            // Dashboard Actions
+            setTab(tab) {
+                state.dashboardTab = tab;
+                this.render();
+            },
+
+            saveWebhook() {
+                state.webhookUrl = document.getElementById('d_webhook').value;
+                localStorage.setItem('smartlog_webhook', state.webhookUrl);
+                alert('Đã lưu cấu hình webhook!');
+            },
+
+            copyCode() {
+                const code = document.getElementById('apps_script_code').innerText;
+                const textarea = document.createElement('textarea');
+                textarea.value = code;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Đã copy!');
+            },
+
+            openDetail(index) {
+                this.renderModal(state.leads[index]);
+            },
+
+            closeModal() {
+                document.getElementById('modal-container').classList.add('hidden');
+                document.getElementById('modal-container').classList.remove('flex');
+            },
+
+            // --- RENDERING ---
+            render() {
+                const container = document.getElementById('app-container');
+                const headerActions = document.getElementById('header-actions');
+
+                // Render Header Actions
+                if (state.view === 'survey') {
+                    headerActions.innerHTML = `<button onclick="app.changeView('login')" class="text-sm text-gray-500 hover:text-primary flex items-center gap-1"><i data-lucide="lock" class="w-4 h-4"></i> Admin</button>`;
+                } else if (state.view === 'dashboard') {
+                    headerActions.innerHTML = `<button onclick="app.changeView('survey')" class="text-sm font-medium text-primary">Quay lại Khảo sát</button>`;
+                } else {
+                    headerActions.innerHTML = '';
+                }
+
+                // Render View
+                if (state.view === 'survey') container.innerHTML = this.getSurveyHTML();
+                if (state.view === 'login') container.innerHTML = this.getLoginHTML();
+                if (state.view === 'dashboard') container.innerHTML = this.getDashboardHTML();
+
+                lucide.createIcons();
+            },
+
+            getSurveyHTML() {
+                if (state.surveyStep === 0) {
+                    const jobsOptions = JOB_TITLES.map(j => `<option value="${j}" ${state.formData.jobTitle === j ? 'selected' : ''}>${j}</option>`).join('');
+                    return `
+                    <div class="flex-grow flex items-center justify-center p-4 bg-gray-50 overflow-y-auto">
+                        <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-8 md:p-10 border-t-8 border-primary my-auto">
+                            <h1 class="text-[35px] font-bold text-primary mb-2 leading-tight">Đánh giá tiềm năng triển khai Hệ thống Logistics</h1>
+                            <p class="text-[18px] text-gray-600 mb-8">Vui lòng cung cấp thông Bản để chúng tôi có thể hỗ trợ bạn tốt nhất.</p>
+                            
+                            <form onsubmit="app.handleInfoSubmit(event)" class="space-y-5">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1 text-text">Họ và Tên *</label>
+                                        <input required type="text" id="f_name" value="${state.formData.name}" class="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none transition" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1 text-text">Công ty *</label>
+                                        <input required type="text" id="f_company" value="${state.formData.company}" class="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none transition" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1 text-text">Số điện thoại *</label>
+                                        <input required type="tel" id="f_phone" value="${state.formData.phone}" class="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none transition" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold mb-1 text-text">Email *</label>
+                                        <input required type="email" id="f_email" value="${state.formData.email}" class="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none transition" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold mb-1 text-text">Chức vụ *</label>
+                                    <select required id="f_job" class="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none transition">
+                                        <option value="">-- Chọn chức vụ --</option>
+                                        ${jobsOptions}
+                                    </select>
+                                </div>
+                                <button type="submit" class="w-full btn-primary text-lg font-bold py-4 rounded-xl mt-4 flex justify-center items-center gap-2 shadow-lg">
+                                    Bắt đầu khảo sát <i data-lucide="chevron-right"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>`;
+                }
+
+                if (state.surveyStep > 0 && state.surveyStep <= QUESTIONS.length) {
+                    const qIndex = state.surveyStep - 1;
+                    const q = QUESTIONS[qIndex];
+                    const isMulti = q.type === 'multiple';
+                    const currentAnswer = state.answers[q.id];
+                    const progress = (state.surveyStep / QUESTIONS.length) * 100;
+
+                    const optionsHTML = q.options.map((opt, idx) => {
+                        const isSelected = isMulti ? (currentAnswer || []).includes(idx) : currentAnswer === idx;
+                        const baseClass = isSelected ? 'border-primary bg-bg-box' : 'border-gray-200 bg-white hover:border-blue-300';
+                        const textClass = isSelected ? 'font-semibold text-primary' : 'text-gray-700';
+                        const iconClass = isSelected ? 'border-primary bg-primary' : 'border-gray-300';
+                        const roundedIcon = isMulti ? 'rounded-md' : 'rounded-full';
+
+                        return `
+                            <button onclick="app.handleAnswer(${q.id}, ${idx}, ${isMulti})" class="w-full text-left p-5 rounded-xl border-2 transition-all flex items-center justify-between group ${baseClass}">
+                                <span class="text-[18px] ${textClass}">${opt.text}</span>
+                                <div class="w-6 h-6 border-2 flex items-center justify-center shrink-0 ${roundedIcon} ${iconClass}">
+                                    ${isSelected ? '<i data-lucide="check" class="text-white w-4 h-4"></i>' : ''}
+                                </div>
+                            </button>
+                        `;
+                    }).join('');
+
+                    const nextDisabled = isMulti && (!currentAnswer || currentAnswer.length === 0);
+                    const showSubmit = !isMulti && state.surveyStep === QUESTIONS.length && currentAnswer !== undefined;
+                    const showNext = isMulti;
+
+                    return `
+                    <div class="flex-grow flex flex-col overflow-y-auto">
+                        <div class="w-full bg-gray-200 h-2">
+                            <div class="bg-highlight h-2 transition-all duration-500" style="width: ${progress}%"></div>
+                        </div>
+                        <div class="flex-grow flex items-center justify-center p-4 bg-gray-50">
+                            <div class="max-w-3xl w-full">
+                                <div class="mb-4 text-sm font-bold text-highlight uppercase tracking-wider">Câu hỏi ${state.surveyStep} / ${QUESTIONS.length}</div>
+                                <h2 class="text-[35px] font-bold text-text mb-8 leading-tight bg-white p-8 rounded-2xl shadow-sm border border-gray-100">${q.text}</h2>
+                                <div class="space-y-4">${optionsHTML}</div>
+                                <div class="mt-8 flex justify-between items-center">
+                                    <button onclick="app.prevStep()" class="px-6 py-3 rounded-lg font-medium text-gray-600 hover:bg-gray-200 transition flex items-center gap-2">
+                                        <i data-lucide="chevron-left"></i> Quay lại
+                                    </button>
+                                    
+                                    ${showNext ? `
+                                        <button onclick="${state.surveyStep === QUESTIONS.length ? 'app.submitSurvey()' : 'app.nextStep()'}" 
+                                            ${nextDisabled ? 'disabled' : ''}
+                                            class="px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${nextDisabled ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'btn-primary shadow-md'}">
+                                            ${state.surveyStep === QUESTIONS.length ? 'Hoàn thành' : 'Tiếp tục'} <i data-lucide="chevron-right"></i>
+                                        </button>
+                                    ` : ''}
+                                    
+                                    ${showSubmit ? `
+                                        <button onclick="app.submitSurvey()" class="px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all btn-primary shadow-md">
+                                            Hoàn thành <i data-lucide="chevron-right"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                if (state.surveyStep > QUESTIONS.length) {
+                    return `
+                    <div class="flex-grow flex items-center justify-center p-4 bg-primary overflow-y-auto">
+                        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-10 text-center relative overflow-hidden">
+                            <div class="absolute top-0 left-0 w-full h-2 bg-highlight"></div>
+                            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <i data-lucide="check" class="text-green-600 w-10 h-10"></i>
+                            </div>
+                            <h2 class="text-[35px] font-bold text-text mb-4 leading-tight">Cảm ơn bạn!</h2>
+                            <p class="text-[16px] text-gray-600 mb-8">Hệ thống đã ghi nhận đánh giá của bạn. Đội ngũ chuyên gia từ Smartlog sẽ phân tích và liên hệ với bạn trong thời gian sớm nhất để tư vấn giải pháp tối ưu.</p>
+                            <div class="bg-bg-box p-6 rounded-xl text-left border border-blue-100">
+                                <h3 class="font-bold text-primary mb-3 text-lg">Thông tin liên hệ Smartlog:</h3>
+                                <ul class="space-y-3 text-[16px]">
+                                    <li class="flex items-center gap-3"><span class="w-6 text-center">🇻🇳</span> <strong>Vietnam:</strong> +84 866 837 732</li>
+                                    <li class="flex items-center gap-3"><span class="w-6 text-center">🇮🇳</span> <strong>India:</strong> +91 956 115 3131</li>
+                                    <li class="flex items-center gap-3"><span class="w-6 text-center">🌐</span> <strong>Website:</strong> <a href="https://gosmartlog.com" target="_blank" class="text-blue-600 hover:underline">gosmartlog.com</a></li>
+                                </ul>
+                            </div>
+                            <button onclick="window.location.reload()" class="mt-6 text-sm text-gray-500 hover:text-primary underline">Thực hiện khảo sát mới</button>
+                        </div>
+                    </div>`;
+                }
+                return '';
+            },
+
+            getLoginHTML() {
+                return `
+                <div class="flex-grow flex items-center justify-center bg-gray-100 p-4">
+                    <div class="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full relative">
+                        <button onclick="app.changeView('survey')" class="absolute top-4 left-4 p-2 text-gray-500 hover:bg-gray-100 rounded-full"><i data-lucide="chevron-left"></i></button>
+                        <div class="text-center mb-8 mt-4">
+                            <div class="w-12 h-12 bg-gray-900 text-white rounded-full flex items-center justify-center mx-auto mb-3"><i data-lucide="lock"></i></div>
+                            <h2 class="text-2xl font-bold">Quản trị Hệ thống</h2>
+                        </div>
+                        ${state.loginError ? '<div class="bg-red-50 text-red-600 p-3 rounded-lg text-sm mb-4 border border-red-200">Tài khoản hoặc mật khẩu không đúng.</div>' : ''}
+                        <form onsubmit="app.handleLogin(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Tài khoản</label>
+                                <input type="text" id="l_user" class="w-full p-3 border rounded-lg outline-none focus:border-primary" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+                                <input type="password" id="l_pass" class="w-full p-3 border rounded-lg outline-none focus:border-primary" />
+                            </div>
+                            <button type="submit" class="w-full bg-gray-900 text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition mt-2">Đăng nhập</button>
+                        </form>
+                    </div>
+                </div>`;
+            },
+
+            getDashboardHTML() {
+                // Calc KPIs
+                const totalLeads = state.leads.length;
+                const highPriority = state.leads.filter(l => l.tier === 'Hot Lead' || l.tier === 'Warm Lead').length;
+                const potentialRate = totalLeads ? Math.round((state.leads.filter(l => ['Hot Lead', 'Warm Lead', 'Potential Lead'].includes(l.tier)).length / totalLeads) * 100) : 0;
+                
+                let topNeed = "Chưa có dữ liệu";
+                if (totalLeads > 0) {
+                    const needCounts = {};
+                    const q8 = QUESTIONS.find(q => q.id === 8);
+                    state.leads.forEach(lead => {
+                        const answers = lead.rawAnswers[8] || [];
+                        answers.forEach(idx => {
+                            const tag = q8.options[idx].tag;
+                            if(tag !== 'UNCLEAR') needCounts[tag] = (needCounts[tag] || 0) + 1;
+                        });
+                    });
+                    const sortedNeeds = Object.entries(needCounts).sort((a,b) => b[1] - a[1]);
+                    if (sortedNeeds.length > 0) topNeed = sortedNeeds[0][0];
+                }
+
+                let content = '';
+
+                if (state.dashboardTab === 'overview') {
+                    const rows = state.leads.length === 0 
+                        ? `<tr><td colspan="6" class="p-8 text-center text-gray-500">Chưa có dữ liệu khảo sát nào.</td></tr>`
+                        : state.leads.map((lead, idx) => {
+                            const tierInfo = TIERS.find(t => t.name === lead.tier);
+                            const badge = `<span class="px-3 py-1 rounded-full text-xs font-bold text-white ${tierInfo ? tierInfo.color : 'bg-gray-500'}">${tierInfo ? tierInfo.type : ''} ${lead.tier}</span>`;
+                            return `
+                            <tr class="border-b hover:bg-gray-50 transition">
+                                <td class="p-4 whitespace-nowrap text-gray-500">${new Date(lead.date).toLocaleString('vi-VN')}</td>
+                                <td class="p-4 font-semibold text-gray-800">${lead.customer.name}</td>
+                                <td class="p-4">
+                                    <div class="font-medium">${lead.customer.company}</div>
+                                    <div class="text-xs text-gray-500">${lead.customer.jobTitle}</div>
+                                </td>
+                                <td class="p-4">
+                                    <div class="text-gray-700">${lead.customer.phone}</div>
+                                    <div class="text-xs text-gray-500">${lead.customer.email}</div>
+                                </td>
+                                <td class="p-4">
+                                    <div class="flex flex-col gap-1 items-start">
+                                        ${badge}
+                                        <span class="text-xs font-medium text-gray-600">Điểm: ${lead.scores.total}/100</span>
+                                    </div>
+                                </td>
+                                <td class="p-4 text-center">
+                                    <button onclick="app.openDetail(${idx})" class="p-2 text-primary hover:bg-bg-box rounded-lg transition inline-flex items-center gap-1 text-sm font-medium">
+                                        <i data-lucide="eye" class="w-4 h-4"></i> Xem
+                                    </button>
+                                </td>
+                            </tr>`;
+                        }).join('');
+
+                    content = `
+                    <div class="max-w-7xl mx-auto space-y-8 pb-10">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <span class="text-gray-500 text-sm font-medium mb-2 flex items-center gap-2"><i data-lucide="users" class="w-4 h-4"></i> Tổng số Lead</span>
+                                <span class="text-3xl font-bold text-gray-800">${totalLeads}</span>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <span class="text-gray-500 text-sm font-medium mb-2 flex items-center gap-2"><i data-lucide="target" class="w-4 h-4"></i> SQL Ưu tiên cao</span>
+                                <span class="text-3xl font-bold text-highlight">${highPriority}</span>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <span class="text-gray-500 text-sm font-medium mb-2 flex items-center gap-2"><i data-lucide="star" class="w-4 h-4"></i> Tỷ lệ tiềm năng</span>
+                                <span class="text-3xl font-bold text-primary">${potentialRate}%</span>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                                <span class="text-gray-500 text-sm font-medium mb-2 flex items-center gap-2"><i data-lucide="database" class="w-4 h-4"></i> Nhu cầu chính</span>
+                                <span class="text-2xl font-bold text-green-600 mt-1">${topNeed}</span>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="p-6 border-b flex justify-between items-center bg-gray-50/50">
+                                <h3 class="font-bold text-lg text-gray-800">Danh sách Leads ghi nhận (${totalLeads})</h3>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-gray-50 text-gray-600 font-medium border-b">
+                                        <tr>
+                                            <th class="p-4">Thời gian</th>
+                                            <th class="p-4">Khách hàng</th>
+                                            <th class="p-4">Công ty / Chức vụ</th>
+                                            <th class="p-4">Liên hệ</th>
+                                            <th class="p-4">Kết quả khảo sát</th>
+                                            <th class="p-4 text-center">Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                if (state.dashboardTab === 'settings') {
+                    const appsScriptCode = `function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+    var row = [
+      data.date,
+      data.customer.name,
+      data.customer.company,
+      data.customer.phone,
+      data.customer.email,
+      data.customer.jobTitle,
+      data.scores.total,
+      data.tier,
+      data.tags.join(', ')
+    ];
+    sheet.appendRow(row);
+    return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+  } catch(error) {
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": error.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+                    content = `
+                    <div class="max-w-4xl mx-auto space-y-6 pb-10">
+                        <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 class="font-bold text-xl text-gray-800 mb-6 flex items-center gap-2"><i data-lucide="settings" class="text-primary"></i> Cấu hình Webhook (Google Sheets)</h3>
+                            <div class="mb-8">
+                                <label class="block font-semibold mb-2 text-gray-700">Google Apps Script Webhook URL</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="d_webhook" value="${state.webhookUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="flex-grow p-3 border rounded-lg outline-none focus:border-primary font-mono text-sm" />
+                                    <button class="btn-primary px-6 rounded-lg font-bold" onclick="app.saveWebhook()">Lưu</button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">Dữ liệu sẽ được tự động push về URL này mỗi khi có người hoàn thành khảo sát.</p>
+                            </div>
+                            <div class="bg-gray-900 rounded-xl overflow-hidden">
+                                <div class="flex justify-between items-center p-3 bg-gray-800 border-b border-gray-700">
+                                    <span class="text-sm font-semibold text-gray-300">Code Google Apps Script (Code.gs)</span>
+                                    <button onclick="app.copyCode()" class="text-gray-400 hover:text-white flex items-center gap-1 text-xs"><i data-lucide="copy" class="w-3 h-3"></i> Copy Code</button>
+                                </div>
+                                <pre id="apps_script_code" class="p-4 text-sm text-green-400 overflow-x-auto font-mono whitespace-pre">${appsScriptCode}</pre>
+                            </div>
+                            <div class="mt-4 p-4 bg-yellow-50 text-yellow-800 rounded-lg text-sm border border-yellow-200">
+                                <strong>Hướng dẫn:</strong> Mở Google Sheet mới > Extensions > Apps Script > Dán code trên vào > Nhấn Deploy > New Deployment > Chọn Web app > Execute as: Me, Who has access: Anyone > Copy Web app URL dán vào ô bên trên.
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                return `
+                <div class="flex-grow flex bg-gray-50 h-full overflow-hidden absolute inset-0">
+                    <div class="w-64 bg-white border-r shadow-sm flex flex-col z-10 shrink-0">
+                        <div class="p-6">
+                            <h2 class="font-bold text-gray-800 text-lg">Sales Dashboard</h2>
+                            <p class="text-xs text-gray-500">Khảo sát tiềm năng KH</p>
+                        </div>
+                        <nav class="flex-grow flex flex-col gap-2 px-4">
+                            <button onclick="app.setTab('overview')" class="flex items-center gap-3 p-3 rounded-xl font-medium transition ${state.dashboardTab === 'overview' ? 'bg-bg-box text-primary' : 'text-gray-600 hover:bg-gray-100'}">
+                                <i data-lucide="trending-up" class="w-5 h-5"></i> Báo cáo & Leads
+                            </button>
+                            <button onclick="app.setTab('settings')" class="flex items-center gap-3 p-3 rounded-xl font-medium transition ${state.dashboardTab === 'settings' ? 'bg-bg-box text-primary' : 'text-gray-600 hover:bg-gray-100'}">
+                                <i data-lucide="settings" class="w-5 h-5"></i> Cài đặt Tích hợp
+                            </button>
+                        </nav>
+                    </div>
+                    <div class="flex-grow overflow-auto p-8 relative">
+                        ${content}
+                    </div>
+                </div>`;
+            },
+
+            renderModal(lead) {
+                const tierInfo = TIERS.find(t => t.name === lead.tier);
+                const badge = `<span class="px-3 py-1 rounded-full text-xs font-bold text-white ${tierInfo ? tierInfo.color : 'bg-gray-500'}">${tierInfo ? tierInfo.type : ''} ${lead.tier}</span>`;
+                const tagsHTML = lead.tags.length > 0 
+                    ? lead.tags.map(tag => `<span class="px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-800 rounded-lg text-sm font-bold shadow-sm">#${tag}</span>`).join('')
+                    : `<span class="text-sm text-gray-500 italic">Không có tags đặc biệt.</span>`;
+
+                let strategyText = "";
+                if(lead.tier === 'Hot Lead') strategyText = "Gọi điện trong 24h, tổ chức 1st meeting kèm demo trong tuần này, kéo Solution Consultant tham gia ngay.";
+                else if(lead.tier === 'Warm Lead') strategyText = "Liên hệ trong 3 ngày, gửi case study phù hợp ngành, đặt lịch khảo sát vận hành 1-1.";
+                else if(lead.tier === 'Potential Lead') strategyText = "Gửi email giới thiệu hệ sinh thái Smartlog, follow up sau 7–14 ngày, mời tham gia webinar.";
+                else if(lead.tier === 'Cold Lead') strategyText = "Đưa vào chuỗi nurture email theo tháng, liên hệ lại sau 1 quý.";
+                else strategyText = "Lưu vào database, không đầu tư nguồn lực chủ động.";
+
+                const modal = document.getElementById('modal-container');
+                modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+                    <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+                        <h3 class="font-bold text-xl text-gray-800">Chi tiết Phân tích Lead</h3>
+                        <button onclick="app.closeModal()" class="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    <div class="p-6 overflow-y-auto flex-grow space-y-6">
+                        <div class="flex flex-col md:flex-row justify-between gap-4 p-5 rounded-xl bg-gray-50 border">
+                            <div>
+                                <h4 class="text-2xl font-bold text-primary mb-1">${lead.customer.name}</h4>
+                                <div class="text-gray-600 font-medium">${lead.customer.jobTitle} tại ${lead.customer.company}</div>
+                                <div class="mt-3 flex gap-4 text-sm text-gray-600">
+                                    <span>📞 ${lead.customer.phone}</span>
+                                    <span>✉️ ${lead.customer.email}</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-4xl font-black text-gray-800 mb-2">${lead.scores.total}<span class="text-lg text-gray-400 font-normal">/100</span></div>
+                                ${badge}
+                                ${lead.overrideApplied ? `<div class="text-xs text-highlight font-bold mt-2 animate-pulse">⚠️ Nâng bậc tự động</div>` : ''}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg mb-4 flex items-center gap-2"><i data-lucide="target" class="text-primary w-5 h-5"></i> Chi tiết Ma trận điểm</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="p-4 border rounded-xl">
+                                    <div class="text-xs font-bold text-gray-500 uppercase mb-1">Nhóm A (Max 35)</div>
+                                    <div class="font-bold text-gray-800 mb-2">Quy mô vận hành</div>
+                                    <div class="text-2xl font-bold text-blue-600">${lead.scores.scale}</div>
+                                </div>
+                                <div class="p-4 border rounded-xl">
+                                    <div class="text-xs font-bold text-gray-500 uppercase mb-1">Nhóm B (Max 45)</div>
+                                    <div class="font-bold text-gray-800 mb-2">Mức độ sẵn sàng</div>
+                                    <div class="text-2xl font-bold text-green-600">${lead.scores.readiness}</div>
+                                </div>
+                                <div class="p-4 border rounded-xl">
+                                    <div class="text-xs font-bold text-gray-500 uppercase mb-1">Nhóm C (Max 20)</div>
+                                    <div class="font-bold text-gray-800 mb-2">Fit & Intent</div>
+                                    <div class="text-2xl font-bold text-purple-600">${lead.scores.intent}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg mb-4 flex items-center gap-2"><i data-lucide="star" class="text-highlight w-5 h-5"></i> Tags & Insights hành động</h4>
+                            <div class="flex flex-wrap gap-2">${tagsHTML}</div>
+                            <div class="mt-4 p-4 rounded-xl bg-bg-box border border-blue-200">
+                                <h5 class="font-bold text-primary mb-2">Gợi ý Chiến lược tiếp cận:</h5>
+                                <p class="text-sm text-gray-700">${strategyText}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                lucide.createIcons();
+            }
+        };
+
+        // Initialize App
+        app.init();
+    </script>
+</body>
+</html>
